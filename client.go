@@ -3,10 +3,13 @@ package aws_signing_client
 import (
 	"net/http"
 
-	"bytes"
 	"strings"
 	"time"
 
+	"bytes"
+	"io"
+
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/aws/aws-sdk-go/private/protocol/rest"
 )
@@ -32,11 +35,6 @@ type (
 	// MissingRegionError is an implementation of the error interface that indicates that no AWS region was
 	// provided in order to create a client.
 	MissingRegionError struct{}
-
-	// SignedCloser implements the ReadCloser interface for closing a request body after being wrapped.
-	SignedCloser struct {
-		body *bytes.Reader
-	}
 )
 
 // NewClient obtains an HTTP client with a RoundTripper that signs AWS requests for the provided service. An
@@ -75,19 +73,16 @@ func (s *Signer) RoundTrip(req *http.Request) (*http.Response, error) {
 		req.URL.RawPath = rest.EscapePath(req.URL.RawPath, false)
 	}
 	t := time.Now()
+	var rc io.Reader
+	rc = req.Body
+	if rc == nil {
+		rc = bytes.NewReader([]byte{})
+	}
 	req.Header.Set("Date", t.Format(time.RFC3339))
-	defer req.Body.Close()
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(req.Body)
-	r := bytes.NewReader(buf.Bytes())
-	head, err := s.v4.Sign(req, r, s.service, s.region, t)
+	head, err := s.v4.Sign(req, aws.ReadSeekCloser(rc), s.service, s.region, t)
 	if err != nil {
 		return nil, err
 	}
-	sc := &SignedCloser{
-		body: r,
-	}
-	req.Body = sc
 	req.Header = head
 	return s.transport.RoundTrip(req)
 }
@@ -105,14 +100,4 @@ func (err MissingServiceError) Error() string {
 // Error implements the error interface.
 func (err MissingRegionError) Error() string {
 	return "No AWS region was provided. Cannot create client."
-}
-
-// Read implements the io.Reader interface for reading a request
-func (sc *SignedCloser) Read(p []byte) (n int, err error) {
-	return sc.body.Read(p)
-}
-
-// Close implements the io.Closer interface for closing a request
-func (sc *SignedCloser) Close() error {
-	return nil
 }
