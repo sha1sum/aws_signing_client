@@ -4,7 +4,7 @@ This package provides simple `http.Client` creation that wraps all outgoing HTTP
 
 ## Requirements
 
-In order to use signing graciously provided by [@nicolai86](https://github.com/nikolai86) in the AWS SDK for Go, you must be using a version that has been updated since the merge of [pull request #698](https://github.com/aws/aws-sdk-go/pull/698) for the SDK.
+In order to use signing graciously provided by [@nicolai86](https://github.com/nicolai86) in the AWS SDK for Go, you must be using a version that has been updated since the merge of [pull request #698](https://github.com/aws/aws-sdk-go/pull/698) for the SDK.
 
 ## Usage
 
