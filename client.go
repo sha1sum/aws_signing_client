@@ -32,25 +32,30 @@ type (
 	// MissingRegionError is an implementation of the error interface that indicates that no AWS region was
 	// provided in order to create a client.
 	MissingRegionError struct{}
+
+	// SignedCloser implements the ReadCloser interface for closing a request body after being wrapped.
+	SignedCloser struct {
+		body *bytes.Reader
+	}
 )
 
 // NewClient obtains an HTTP client with a RoundTripper that signs AWS requests for the provided service. An
 // existing client can be specified for the `client` value, or--if nil--a new HTTP client will be created.
-func NewClient(v4 *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
+func NewClient(signer *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
 	c := client
 	switch {
-	case v4 == nil:
+	case signer == nil:
 		return nil, MissingSignerError{}
 	case service == "":
 		return nil, MissingServiceError{}
 	case region == "":
-		return nil, MissingServiceError{}
+		return nil, MissingRegionError{}
 	case c == nil:
 		c = http.DefaultClient
 	}
 	s := &Signer{
 		transport: client.Transport,
-		v4:        v4,
+		v4:        signer,
 		service:   service,
 		region:    region,
 	}
@@ -79,22 +84,35 @@ func (s *Signer) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Body = r
+	sc := &SignedCloser{
+		body: r,
+	}
+	req.Body = sc
 	req.Header = head
 	return s.transport.RoundTrip(req)
 }
 
 // Error implements the error interface.
-func (err *MissingSignerError) Error() string {
+func (err MissingSignerError) Error() string {
 	return "No signer was provided. Cannot create client. Try using the elastic_aws.NewSigner() function."
 }
 
 // Error implements the error interface.
-func (err *MissingServiceError) Error() string {
+func (err MissingServiceError) Error() string {
 	return "No AWS service abbreviation was provided. Cannot create client."
 }
 
 // Error implements the error interface.
-func (err *MissingRegionError) Error() string {
+func (err MissingRegionError) Error() string {
 	return "No AWS region was provided. Cannot create client."
+}
+
+// Read implements the io.Reader interface for reading a request
+func (sc *SignedCloser) Read(p []byte) (n int, err error) {
+	return sc.body.Read(p)
+}
+
+// Close implements the io.Closer interface for closing a request
+func (sc *SignedCloser) Close() error {
+	return nil
 }
