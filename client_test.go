@@ -41,7 +41,7 @@ func Init() {
 }
 
 func nc() (*http.Client, error) {
-	return NewClient(signer, client, service, region)
+	return New(signer, client, service, region)
 }
 
 //   _   _                ____ _ _            _

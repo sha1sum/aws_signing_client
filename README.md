@@ -4,7 +4,7 @@ This package provides simple `http.Client` creation that wraps all outgoing HTTP
 
 ## Requirements
 
-In order to use signing graciously provided by [@nicolai86](https://github.com/nicolai86) in the AWS SDK for Go, you must be using a version that has been updated since the merge of [pull request #698](https://github.com/aws/aws-sdk-go/pull/698) for the SDK.
+In order to use signing graciously provided by [@nicolai86](https://github.com/nikolai86) in the AWS SDK for Go, you must be using a version that has been updated since the merge of [pull request #698](https://github.com/aws/aws-sdk-go/pull/698) for the SDK.
 
 ## Usage
 
@@ -25,7 +25,7 @@ var myClient *http.Client
 // ...
 
 // *v4.Signer, *http.Client, AWS service abbreviation, AWS region
-var awsClient = aws_signing_client.NewClient(signer, myClient, "es", "us-east-1")
+var awsClient = aws_signing_client.New(signer, myClient, "es", "us-east-1")
 ```
 
 ... or you can simply have the default client with default client and transport created for you:
@@ -42,7 +42,5 @@ var credentials *credentials.Credentials
 var signer = v4.NewSigner(credentials)
 
 // *v4.Signer, *http.Client, AWS service abbreviation, AWS region
-var awsClient = aws_signing_client.NewClient(signer, nil, "es", "us-east-1")
+var awsClient = aws_signing_client.New(signer, nil, "es", "us-east-1")
 ```
-
-**CAVEAT**: Since signing content requires an `io.ReadSeeker`, the signing method will read _all_ of your request body before signing, which may be painstaking for very large request bodies.

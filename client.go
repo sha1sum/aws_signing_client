@@ -37,9 +37,9 @@ type (
 	MissingRegionError struct{}
 )
 
-// NewClient obtains an HTTP client with a RoundTripper that signs AWS requests for the provided service. An
+// New obtains an HTTP client with a RoundTripper that signs AWS requests for the provided service. An
 // existing client can be specified for the `client` value, or--if nil--a new HTTP client will be created.
-func NewClient(signer *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
+func New(signer *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
 	c := client
 	switch {
 	case signer == nil:
@@ -65,8 +65,7 @@ func NewClient(signer *v4.Signer, client *http.Client, service string, region st
 }
 
 // RoundTrip implements the http.RoundTripper interface and is used to wrap HTTP requests in order to sign them for AWS
-// API calls. The scheme for all requests will be changed to HTTPS. NOTE: This method reads the entire request body in
-// order to implement the io.ReadSeeker interface and may be troublesome for very large request bodies.
+// API calls. The scheme for all requests will be changed to HTTPS.
 func (s *Signer) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Scheme = "https"
 	if strings.Contains(req.URL.RawPath, "%2C") {
