@@ -4,9 +4,11 @@ import (
 	"net/http"
 	"testing"
 
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/signer/v4"
-	"strings"
+	"fmt"
 )
 
 type testRoundTripper struct {
@@ -15,7 +17,7 @@ type testRoundTripper struct {
 
 var (
 	creds   = credentials.NewStaticCredentials("ID", "SECRET", "TOKEN")
-	signer  *v4.Signer
+	v4s     *v4.Signer
 	client  *http.Client
 	service string
 	region  string
@@ -31,7 +33,7 @@ func init() {
 
 func Init() {
 	rt = &testRoundTripper{}
-	signer = v4.NewSigner(creds)
+	v4s = v4.NewSigner(creds)
 	client = http.DefaultClient
 	client.Transport = rt
 	service = "es"
@@ -41,7 +43,7 @@ func Init() {
 }
 
 func nc() (*http.Client, error) {
-	return New(signer, client, service, region)
+	return New(v4s, client, service, region)
 }
 
 //   _   _                ____ _ _            _
@@ -54,7 +56,7 @@ func nc() (*http.Client, error) {
 // TestNewClientWithoutSigner tests the NewClient() function when it is not passed a *v4.Signer.
 func TestNewClientWithoutSigner(t *testing.T) {
 	Init()
-	signer = nil
+	v4s = nil
 	_, err = nc()
 	if err != (MissingSignerError{}) {
 		t.Error("Error was not of type MissingSignerError")
@@ -117,15 +119,18 @@ func TestRoundTripSignsPostRequest(t *testing.T) {
 }
 
 func checkSignatures(t *testing.T) {
-	switch {
+	auth, ok := passedReq.Header["Authorization"]
+	switch  {
 	case err != nil:
 		t.Errorf("An unexpected error occurred while making a request: %s", err)
-	case passedReq.Header == nil:
-		t.Error("nil headers were returned from the signing request")
-	case len(passedReq.Header["x-amz-date"]) == 0:
-		t.Error("No 'x-amz-date' header was returned from the signing request")
-	case len(passedReq.Header["x-amz-security-token"]) == 0:
-		t.Error("No 'x-amz-security-token' header was returned from the signing request")
+	case len(passedReq.Header["X-Amz-Date"]) == 0:
+		t.Error("No 'X-Amz-Date' header was returned from the signing request")
+	case len(passedReq.Header["X-Amz-Security-Token"]) == 0:
+		t.Error("No 'X-Amz-Security-Token' header was returned from the signing request")
+	case !ok:
+		t.Error("No 'Authorization' header was returned from the signing request")
+	case !strings.HasPrefix(auth[0], "AWS4-HMAC-SHA256 "):
+		t.Error("Authorization header returned does not begin with 'AWS4-HMAC-SHA256'")
 	}
 }
 
