@@ -8,7 +8,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/signer/v4"
-	"fmt"
 )
 
 type testRoundTripper struct {
@@ -120,7 +119,7 @@ func TestRoundTripSignsPostRequest(t *testing.T) {
 
 func checkSignatures(t *testing.T) {
 	auth, ok := passedReq.Header["Authorization"]
-	switch  {
+	switch {
 	case err != nil:
 		t.Errorf("An unexpected error occurred while making a request: %s", err)
 	case len(passedReq.Header["X-Amz-Date"]) == 0:
