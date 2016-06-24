@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"io/ioutil"
+	"log"
+
 	"bytes"
-	"io"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/signer/v4"
@@ -22,6 +24,7 @@ type (
 		v4        *v4.Signer
 		service   string
 		region    string
+		logger    *log.Logger
 	}
 
 	// MissingSignerError is an implementation of the error interface that indicates that no AWS v4.Signer was
@@ -37,12 +40,14 @@ type (
 	MissingRegionError struct{}
 )
 
+var signer *Signer
+
 // New obtains an HTTP client with a RoundTripper that signs AWS requests for the provided service. An
 // existing client can be specified for the `client` value, or--if nil--a new HTTP client will be created.
-func New(signer *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
+func New(v4s *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
 	c := client
 	switch {
-	case signer == nil:
+	case v4s == nil:
 		return nil, MissingSignerError{}
 	case service == "":
 		return nil, MissingServiceError{}
@@ -52,43 +57,76 @@ func New(signer *v4.Signer, client *http.Client, service string, region string) 
 		c = http.DefaultClient
 	}
 	s := &Signer{
-		transport: client.Transport,
-		v4:        signer,
+		transport: c.Transport,
+		v4:        v4s,
 		service:   service,
 		region:    region,
+		logger:    log.New(ioutil.Discard, "", 0),
 	}
 	if s.transport == nil {
 		s.transport = http.DefaultTransport
 	}
+	signer = s
 	c.Transport = s
 	return c, nil
+}
+
+// SetDebugLog sets a logger for use in debugging requests and responses.
+func SetDebugLog(l *log.Logger) {
+	signer.logger = l
 }
 
 // RoundTrip implements the http.RoundTripper interface and is used to wrap HTTP requests in order to sign them for AWS
 // API calls. The scheme for all requests will be changed to HTTPS.
 func (s *Signer) RoundTrip(req *http.Request) (*http.Response, error) {
+	if h, ok := req.Header["Authorization"]; ok && len(h) > 0 && strings.HasPrefix(h[0], "AWS4") {
+		s.logger.Println("Received request to sign that is already signed. Skipping.")
+		return s.transport.RoundTrip(req)
+	}
+	s.logger.Printf("Receiving request for signing: %+v", req)
 	req.URL.Scheme = "https"
 	if strings.Contains(req.URL.RawPath, "%2C") {
+		s.logger.Printf("Escaping path for URL path '%s'", req.URL.RawPath)
 		req.URL.RawPath = rest.EscapePath(req.URL.RawPath, false)
 	}
 	t := time.Now()
-	var rc io.Reader
-	rc = req.Body
-	if rc == nil {
-		rc = bytes.NewReader([]byte{})
-	}
 	req.Header.Set("Date", t.Format(time.RFC3339))
-	head, err := s.v4.Sign(req, aws.ReadSeekCloser(rc), s.service, s.region, t)
+	s.logger.Printf("Final request to be signed: %+v", req)
+	var err error
+	switch req.Body {
+	case nil:
+		s.logger.Println("Signing request with no body...")
+		_, err = s.v4.Sign(req, nil, s.service, s.region, t)
+	default:
+		s.logger.Println("Signing request with body...")
+		_, err = s.v4.Sign(req, aws.ReadSeekCloser(req.Body), s.service, s.region, t)
+	}
 	if err != nil {
+		s.logger.Printf("Error while attempting to sign request: '%s'", err)
 		return nil, err
 	}
-	req.Header = head
-	return s.transport.RoundTrip(req)
+	s.logger.Printf("Signing succesful. Set header to: '%+v'", req.Header)
+	s.logger.Printf("Sending signed request to RoundTripper: %+v", req)
+	resp, err := s.transport.RoundTrip(req)
+	if err != nil {
+		s.logger.Printf("Error from RoundTripper.\n\n\tResponse: %+v\n\n\tError: '%s'", resp, err)
+		return resp, err
+	}
+	respBody := "<nil>"
+	if resp.Body != nil {
+		defer resp.Body.Close()
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		respBody = buf.String()
+		resp.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
+	}
+	s.logger.Printf("Successful response from RoundTripper: %+v\n\nBody: '%s'\n", resp, respBody)
+	return resp, nil
 }
 
 // Error implements the error interface.
 func (err MissingSignerError) Error() string {
-	return "No signer was provided. Cannot create client. Try using the elastic_aws.NewSigner() function."
+	return "No signer was provided. Cannot create client."
 }
 
 // Error implements the error interface.
