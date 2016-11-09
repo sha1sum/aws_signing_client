@@ -11,7 +11,6 @@ import (
 
 	"bytes"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/aws/aws-sdk-go/private/protocol/rest"
 )
@@ -98,8 +97,13 @@ func (s *Signer) RoundTrip(req *http.Request) (*http.Response, error) {
 		s.logger.Println("Signing request with no body...")
 		_, err = s.v4.Sign(req, nil, s.service, s.region, t)
 	default:
+		d, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		req.Body = ioutil.NopCloser(bytes.NewReader(d))
 		s.logger.Println("Signing request with body...")
-		_, err = s.v4.Sign(req, aws.ReadSeekCloser(req.Body), s.service, s.region, t)
+		_, err = s.v4.Sign(req, bytes.NewReader(d), s.service, s.region, t)
 	}
 	if err != nil {
 		s.logger.Printf("Error while attempting to sign request: '%s'", err)
