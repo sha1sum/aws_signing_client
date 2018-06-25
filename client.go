@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/aws/aws-sdk-go/private/protocol/rest"
 )
 
 type AWSSigner interface {
@@ -87,7 +85,7 @@ func (s *Signer) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Scheme = "https"
 	if strings.Contains(req.URL.RawPath, "%2C") {
 		s.logger.Printf("Escaping path for URL path '%s'", req.URL.RawPath)
-		req.URL.RawPath = rest.EscapePath(req.URL.RawPath, false)
+		req.URL.RawPath = escapePath(req.URL.RawPath, false)
 	}
 	t := time.Now()
 	req.Header.Set("Date", t.Format(time.RFC3339))
