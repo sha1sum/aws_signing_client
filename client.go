@@ -1,26 +1,27 @@
 package aws_signing_client
 
 import (
+	"bytes"
+	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
-
 	"strings"
 	"time"
 
-	"io/ioutil"
-	"log"
-
-	"bytes"
-
-	"github.com/aws/aws-sdk-go/aws/signer/v4"
 	"github.com/aws/aws-sdk-go/private/protocol/rest"
 )
+
+type AWSSigner interface {
+	Sign(r *http.Request, body io.ReadSeeker, service, region string, signTime time.Time) (http.Header, error)
+}
 
 type (
 	// Signer implements the http.RoundTripper interface and houses an optional RoundTripper that will be called between
 	// signing and response.
 	Signer struct {
 		transport http.RoundTripper
-		v4        *v4.Signer
+		v4        AWSSigner
 		service   string
 		region    string
 		logger    *log.Logger
@@ -43,7 +44,7 @@ var signer *Signer
 
 // New obtains an HTTP client with a RoundTripper that signs AWS requests for the provided service. An
 // existing client can be specified for the `client` value, or--if nil--a new HTTP client will be created.
-func New(v4s *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
+func New(v4s AWSSigner, client *http.Client, service string, region string) (*http.Client, error) {
 	c := client
 	switch {
 	case v4s == nil:
