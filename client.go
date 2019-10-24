@@ -53,7 +53,7 @@ func New(v4s *v4.Signer, client *http.Client, service string, region string) (*h
 	case region == "":
 		return nil, MissingRegionError{}
 	case c == nil:
-		c = http.DefaultClient
+		c = &http.Client{}
 	}
 	s := &Signer{
 		transport: c.Transport,
