@@ -1,26 +1,25 @@
 package aws_signing_client
 
 import (
-	"net/http"
-
-	"strings"
-	"time"
-
+	"bytes"
+	"io"
 	"io/ioutil"
 	"log"
-
-	"bytes"
-
-	"github.com/aws/aws-sdk-go/aws/signer/v4"
-	"github.com/aws/aws-sdk-go/private/protocol/rest"
+	"net/http"
+	"strings"
+	"time"
 )
+
+type AWSSigner interface {
+	Sign(r *http.Request, body io.ReadSeeker, service, region string, signTime time.Time) (http.Header, error)
+}
 
 type (
 	// Signer implements the http.RoundTripper interface and houses an optional RoundTripper that will be called between
 	// signing and response.
 	Signer struct {
 		transport http.RoundTripper
-		v4        *v4.Signer
+		v4        AWSSigner
 		service   string
 		region    string
 		logger    *log.Logger
@@ -43,7 +42,7 @@ var signer *Signer
 
 // New obtains an HTTP client with a RoundTripper that signs AWS requests for the provided service. An
 // existing client can be specified for the `client` value, or--if nil--a new HTTP client will be created.
-func New(v4s *v4.Signer, client *http.Client, service string, region string) (*http.Client, error) {
+func New(v4s AWSSigner, client *http.Client, service string, region string) (*http.Client, error) {
 	c := client
 	switch {
 	case v4s == nil:
@@ -86,7 +85,7 @@ func (s *Signer) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.URL.Scheme = "https"
 	if strings.Contains(req.URL.RawPath, "%2C") {
 		s.logger.Printf("Escaping path for URL path '%s'", req.URL.RawPath)
-		req.URL.RawPath = rest.EscapePath(req.URL.RawPath, false)
+		req.URL.RawPath = escapePath(req.URL.RawPath, false)
 	}
 	t := time.Now()
 	req.Header.Set("Date", t.Format(time.RFC3339))
