@@ -52,7 +52,7 @@ func New(v4s AWSSigner, client *http.Client, service string, region string) (*ht
 	case region == "":
 		return nil, MissingRegionError{}
 	case c == nil:
-		c = http.DefaultClient
+		c = &http.Client{}
 	}
 	s := &Signer{
 		transport: c.Transport,
